@@ -112,6 +112,20 @@
     </div>
   </section>
 
+  <!-- Judges' Feedback -->
+  <section class="rounded-3xl p-6 mt-6" style="background:var(--panel);border:1px solid var(--line)">
+    <div class="flex items-center justify-between flex-wrap gap-3 mb-4">
+      <div class="mono text-sm tracking-[0.3em]" style="color:var(--gold)">JUDGES' FEEDBACK</div>
+      <div class="flex gap-2">
+        <button id="fbProBtn" class="btn px-5 py-2 rounded-xl font-bold text-sm">PRO TEAM</button>
+        <button id="fbConBtn" class="btn px-5 py-2 rounded-xl font-bold text-sm">CON TEAM</button>
+      </div>
+    </div>
+    <div id="fbBody">
+      <p class="text-sm mono" style="color:var(--muted)">Select a team to view anonymous judge comments.</p>
+    </div>
+  </section>
+
   <p class="text-center text-xs mt-6 mono" style="color:var(--muted)">
     Last updated <span id="lastUpdate">—</span> &middot; polling every 7s
   </p>
@@ -206,6 +220,61 @@ function bump(card){
 
 poll();
 setInterval(poll, POLL_MS);
+
+/* ---------------- Judges' feedback (on demand) ---------------- */
+const fbBody = document.getElementById('fbBody');
+const fbProBtn = document.getElementById('fbProBtn');
+const fbConBtn = document.getElementById('fbConBtn');
+let fbTeam = null;
+
+function setFbActive(team){
+  fbProBtn.classList.toggle('preset', false);
+  fbConBtn.classList.toggle('preset', false);
+  fbProBtn.style.borderColor = team === 'Pro' ? 'var(--pro)' : 'var(--line)';
+  fbProBtn.style.color       = team === 'Pro' ? 'var(--pro)' : 'var(--ink)';
+  fbConBtn.style.borderColor = team === 'Con' ? 'var(--con)' : 'var(--line)';
+  fbConBtn.style.color       = team === 'Con' ? 'var(--con)' : 'var(--ink)';
+}
+
+function escapeHtml(s){
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function loadFeedback(team){
+  fbTeam = team;
+  setFbActive(team);
+  const accent = team === 'Pro' ? 'var(--pro)' : 'var(--con)';
+  fbBody.innerHTML = '<p class="text-sm mono" style="color:var(--muted)">Loading…</p>';
+
+  if (API_URL.startsWith("PASTE_")){
+    fbBody.innerHTML = '<p class="text-sm mono" style="color:var(--gold)">No API URL set.</p>';
+    return;
+  }
+  try {
+    const res = await fetch(API_URL + '?feedback=' + team);
+    const data = await res.json();
+    const comments = data.comments || [];
+    if (!comments.length){
+      fbBody.innerHTML = '<p class="text-sm mono" style="color:var(--muted)">No comments yet for this team.</p>';
+      return;
+    }
+    fbBody.innerHTML =
+      '<div class="grid grid-cols-1 md:grid-cols-2 gap-3">' +
+      comments.map(c =>
+        '<div class="rounded-2xl p-4" style="background:var(--bg);border:1px solid var(--line);border-left:3px solid ' + accent + '">' +
+          '<p class="text-sm" style="line-height:1.5">' + escapeHtml(c) + '</p>' +
+        '</div>'
+      ).join('') +
+      '</div>' +
+      '<p class="mono text-xs mt-3" style="color:var(--muted)">' + comments.length +
+      ' comment' + (comments.length === 1 ? '' : 's') + ' &middot; submitted anonymously</p>';
+  } catch (e){
+    fbBody.innerHTML = '<p class="text-sm mono" style="color:var(--con)">Could not load feedback — retry.</p>';
+  }
+}
+
+fbProBtn.onclick = () => loadFeedback('Pro');
+fbConBtn.onclick = () => loadFeedback('Con');
 </script>
 </body>
 </html>
