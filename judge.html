@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Judge Console</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Mono&family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #f6f2ea;
+    --paper: #fffdf8;
+    --ink: #1d1a16;
+    --muted: #8a8275;
+    --gold: #c4922f;
+    --line: #e6ddcd;
+    --pro: #0d9488;
+    --con: #e11d48;
+    --good: #2f8f5b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(900px 500px at 100% 0%, rgba(196,146,47,.08), transparent 60%),
+      var(--bg);
+    color: var(--ink);
+    font-family: 'Sora', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+  .mono { font-family:'Space Mono', monospace; }
+  .display { font-family:'Archivo Black', sans-serif; }
+  .card { background: var(--paper); border: 1px solid var(--line); }
+  select, textarea {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    font-family: 'Sora', sans-serif;
+  }
+  select:focus, textarea:focus { outline: 2px solid var(--gold); outline-offset: 1px; }
+  .score-btn {
+    border: 1px solid var(--line);
+    background: var(--paper);
+    transition: transform .1s ease, background .15s ease, border-color .15s ease, color .15s ease;
+  }
+  .score-btn:active { transform: scale(.94); }
+  .score-btn.sel {
+    background: var(--ink); color: var(--paper); border-color: var(--ink);
+    transform: scale(1.05);
+  }
+  .submit-btn {
+    background: var(--ink); color: var(--paper);
+    transition: opacity .2s ease, transform .12s ease;
+  }
+  .submit-btn:disabled { opacity: .35; cursor: not-allowed; }
+  .submit-btn:not(:disabled):active { transform: translateY(2px); }
+  .toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(120%);
+    transition: transform .35s cubic-bezier(.2,.9,.3,1.2);
+    z-index: 60;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<div class="max-w-md mx-auto px-4 py-6">
+
+  <header class="mb-5">
+    <h1 class="display text-xl tracking-tight">JUDGE CONSOLE</h1>
+    <p class="text-xs" style="color:var(--muted)">Independent &amp; blind evaluation</p>
+  </header>
+
+  <!-- Identity -->
+  <div class="card rounded-2xl p-4 mb-4">
+    <div class="grid grid-cols-2 gap-3">
+      <label class="block">
+        <span class="mono text-xs" style="color:var(--muted)">YOUR IDENTITY</span>
+        <select id="judgeId" class="w-full mt-1 rounded-xl px-3 py-2">
+          <option value="">Select…</option>
+          <option value="1">Judge 1</option>
+          <option value="2">Judge 2</option>
+          <option value="3">Judge 3</option>
+          <option value="4">Judge 4</option>
+          <option value="5">Judge 5</option>
+          <option value="6">Judge 6</option>
+        </select>
+      </label>
+      <label class="block">
+        <span class="mono text-xs" style="color:var(--muted)">EVALUATING</span>
+        <select id="target" class="w-full mt-1 rounded-xl px-3 py-2">
+          <option value="">Select…</option>
+          <option value="Pro">Pro Team</option>
+          <option value="Con">Con Team</option>
+        </select>
+      </label>
+    </div>
+  </div>
+
+  <!-- Rubric -->
+  <div id="rubric" class="space-y-3 mb-4"></div>
+
+  <!-- Feedback -->
+  <div class="card rounded-2xl p-4 mb-4">
+    <label class="block">
+      <span class="mono text-xs" style="color:var(--muted)">CONSTRUCTIVE FEEDBACK <span style="color:var(--con)">*required</span></span>
+      <textarea id="feedback" rows="4" placeholder="Write at least a sentence of constructive remarks…"
+        class="w-full mt-2 rounded-xl px-3 py-2 resize-none"></textarea>
+    </label>
+  </div>
+
+  <!-- Running total (this judge only — blind to others) -->
+  <div class="flex items-center justify-between px-1 mb-3">
+    <span class="mono text-xs" style="color:var(--muted)">YOUR BALLOT TOTAL</span>
+    <span id="myTotal" class="display text-2xl">0<span class="text-sm" style="color:var(--muted)">/20</span></span>
+  </div>
+
+  <button id="submitBtn" class="submit-btn w-full rounded-2xl py-4 font-bold text-lg" disabled>
+    SUBMIT BALLOT
+  </button>
+
+  <p class="text-center text-xs mt-4 mono" style="color:var(--muted)">
+    You cannot see other judges' scores or the live totals.
+  </p>
+</div>
+
+<div id="toast" class="toast card rounded-xl px-5 py-3 font-bold" style="color:var(--good)">
+  ✓ Ballot submitted
+</div>
+
+<script>
+/* ============================================================
+   CONFIG — paste your deployed Google Apps Script Web App URL
+   ============================================================ */
+const API_URL = "https://script.google.com/macros/s/AKfycbz2nWvvPio_z7rJSRmON9Stf8Y06F-tVF381P8tQaW6xZgWY9OBSW8hhaLSSdoaIfLnag/exec";
+
+const CATEGORIES = [
+  { key: 'Cat1_Score', label: 'Argumentation', hint: 'Clarity & logic of claims' },
+  { key: 'Cat2_Score', label: 'Evidence',      hint: 'Quality of support' },
+  { key: 'Cat3_Score', label: 'Rebuttal',      hint: 'Response to opponents' },
+  { key: 'Cat4_Score', label: 'Delivery',      hint: 'Poise & communication' },
+];
+
+const scores = {};
+const rubricEl = document.getElementById('rubric');
+
+CATEGORIES.forEach(cat => {
+  const block = document.createElement('div');
+  block.className = 'card rounded-2xl p-4';
+  block.innerHTML = `
+    <div class="flex items-baseline justify-between mb-3">
+      <span class="font-semibold">${cat.label}</span>
+      <span class="text-xs" style="color:var(--muted)">${cat.hint}</span>
+    </div>
+    <div class="grid grid-cols-5 gap-2" data-cat="${cat.key}"></div>`;
+  const row = block.querySelector('[data-cat]');
+  for (let n = 1; n <= 5; n++){
+    const b = document.createElement('button');
+    b.className = 'score-btn rounded-xl py-3 font-bold mono';
+    b.textContent = n;
+    b.onclick = () => {
+      scores[cat.key] = n;
+      row.querySelectorAll('.score-btn').forEach(x => x.classList.remove('sel'));
+      b.classList.add('sel');
+      refresh();
+    };
+    row.appendChild(b);
+  }
+  rubricEl.appendChild(block);
+});
+
+const judgeSel = document.getElementById('judgeId');
+const targetSel = document.getElementById('target');
+const feedbackEl = document.getElementById('feedback');
+const submitBtn = document.getElementById('submitBtn');
+const myTotalEl = document.getElementById('myTotal');
+
+function total(){ return CATEGORIES.reduce((s,c) => s + (scores[c.key]||0), 0); }
+function complete(){
+  return judgeSel.value && targetSel.value &&
+         CATEGORIES.every(c => scores[c.key]) &&
+         feedbackEl.value.trim().length >= 3;
+}
+function refresh(){
+  myTotalEl.innerHTML = total() + '<span class="text-sm" style="color:var(--muted)">/20</span>';
+  submitBtn.disabled = !complete();
+}
+[judgeSel, targetSel].forEach(el => el.onchange = refresh);
+feedbackEl.oninput = refresh;
+
+function showToast(msg, color){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.color = color;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+submitBtn.onclick = async () => {
+  if (!complete()) return;
+  const payload = {
+    Judge_ID: Number(judgeSel.value),
+    Target_Team: targetSel.value,
+    Cat1_Score: scores.Cat1_Score,
+    Cat2_Score: scores.Cat2_Score,
+    Cat3_Score: scores.Cat3_Score,
+    Cat4_Score: scores.Cat4_Score,
+    Total_Score: total(),
+    Feedback: feedbackEl.value.trim(),
+  };
+
+  if (API_URL.startsWith("PASTE_")){
+    showToast("⚠ No API URL configured", "var(--gold)");
+    return;
+  }
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = "SUBMITTING…";
+  try {
+    // text/plain avoids a CORS preflight against Apps Script
+    await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload),
+    });
+    showToast("✓ Ballot submitted", "var(--good)");
+    // reset for next ballot, keep identity
+    CATEGORIES.forEach(c => delete scores[c.key]);
+    document.querySelectorAll('.score-btn').forEach(x => x.classList.remove('sel'));
+    feedbackEl.value = '';
+    targetSel.value = '';
+    refresh();
+  } catch (e){
+    showToast("✗ Submission failed — retry", "var(--con)");
+  } finally {
+    submitBtn.textContent = "SUBMIT BALLOT";
+    refresh();
+  }
+};
+
+refresh();
+</script>
+</body>
+</html>

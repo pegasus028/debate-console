@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Debate Master Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Mono:wght@400;700&family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0b0e14;
+    --panel: #141925;
+    --ink: #f5f3ee;
+    --muted: #8b93a7;
+    --pro: #2dd4bf;
+    --con: #fb7185;
+    --gold: #f5b942;
+    --line: #232a3a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1200px 600px at 15% -10%, rgba(45,212,191,.12), transparent 60%),
+      radial-gradient(1200px 600px at 85% -10%, rgba(251,113,133,.12), transparent 60%),
+      var(--bg);
+    color: var(--ink);
+    font-family: 'Sora', sans-serif;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: 'Space Mono', monospace; }
+  .display { font-family: 'Archivo Black', sans-serif; }
+  .grain {
+    position: fixed; inset: 0; pointer-events: none; opacity: .035; z-index: 50;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .clock-glow { text-shadow: 0 0 40px rgba(245,185,66,.35); }
+  .timer-warn { color: var(--gold) !important; }
+  .timer-danger { color: var(--con) !important; animation: pulse .9s infinite; }
+  @keyframes pulse { 50% { opacity: .45; } }
+  .btn {
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--ink);
+    transition: transform .12s ease, border-color .2s ease, background .2s ease;
+  }
+  .btn:hover { transform: translateY(-2px); border-color: #3a4258; }
+  .btn:active { transform: translateY(0); }
+  .preset.active { border-color: var(--gold); background: rgba(245,185,66,.12); color: var(--gold); }
+  .scorecard { transition: box-shadow .4s ease; }
+  .bump { animation: bump .5s ease; }
+  @keyframes bump { 0%{transform:scale(1)} 40%{transform:scale(1.06)} 100%{transform:scale(1)} }
+  .dot { width:8px;height:8px;border-radius:50%; }
+  .pulse-dot { animation: live 1.6s infinite; }
+  @keyframes live { 0%,100%{opacity:1} 50%{opacity:.25} }
+</style>
+</head>
+<body>
+<div class="grain"></div>
+
+<div class="max-w-7xl mx-auto px-6 py-6">
+
+  <!-- Header -->
+  <header class="flex items-center justify-between flex-wrap gap-4 mb-6">
+    <div>
+      <h1 class="display text-2xl md:text-3xl tracking-tight">DEBATE CONTROL</h1>
+      <p class="text-sm" style="color:var(--muted)">Moderator Dashboard &middot; audience-facing</p>
+    </div>
+    <div class="flex items-center gap-2 text-xs mono px-3 py-2 rounded-full" style="background:var(--panel);border:1px solid var(--line)">
+      <span id="liveDot" class="dot pulse-dot" style="background:var(--muted)"></span>
+      <span id="connStatus" style="color:var(--muted)">CONNECTING…</span>
+    </div>
+  </header>
+
+  <!-- Timer -->
+  <section class="rounded-3xl p-8 mb-6" style="background:var(--panel);border:1px solid var(--line)">
+    <div class="text-center">
+      <div id="phaseLabel" class="mono text-sm tracking-[0.3em] mb-2" style="color:var(--gold)">READY</div>
+      <div id="timer" class="display clock-glow leading-none" style="font-size:clamp(5rem,18vw,12rem)">01:00</div>
+    </div>
+
+    <div class="flex items-center justify-center gap-3 mt-6 flex-wrap">
+      <button id="startBtn" class="btn px-8 py-4 rounded-2xl font-bold text-lg">START</button>
+      <button id="pauseBtn" class="btn px-8 py-4 rounded-2xl font-bold text-lg">PAUSE</button>
+      <button id="resetBtn" class="btn px-8 py-4 rounded-2xl font-bold text-lg">RESET</button>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-2 mt-6 max-w-3xl mx-auto">
+      <button class="preset btn px-3 py-3 rounded-xl text-sm" data-secs="60" data-label="OPENING / ARGUMENT / CLOSING">Opening<br><span class="mono text-xs" style="color:var(--muted)">1:00</span></button>
+      <button class="preset btn px-3 py-3 rounded-xl text-sm" data-secs="240" data-label="CROSS-EXAMINATION">Cross-Exam<br><span class="mono text-xs" style="color:var(--muted)">4:00</span></button>
+      <button class="preset btn px-3 py-3 rounded-xl text-sm" data-secs="300" data-label="JUDGES' INQUIRY">Judges' Inquiry<br><span class="mono text-xs" style="color:var(--muted)">5:00</span></button>
+      <button class="preset btn px-3 py-3 rounded-xl text-sm" data-secs="30" data-label="LIGHTNING RESPONSE">Lightning<br><span class="mono text-xs" style="color:var(--muted)">0:30</span></button>
+      <button class="preset btn px-3 py-3 rounded-xl text-sm" data-secs="60" data-label="OPENING / ARGUMENT / CLOSING">Argument<br><span class="mono text-xs" style="color:var(--muted)">1:00</span></button>
+    </div>
+  </section>
+
+  <!-- Scoreboard -->
+  <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div id="proCard" class="scorecard rounded-3xl p-8 text-center" style="background:var(--panel);border:1px solid var(--line)">
+      <div class="mono text-sm tracking-[0.3em] mb-2" style="color:var(--pro)">PRO TEAM</div>
+      <div id="proScore" class="display leading-none" style="font-size:clamp(4rem,12vw,8rem);color:var(--pro)">0</div>
+      <div class="mono text-xs mt-2" style="color:var(--muted)">of 120 possible</div>
+    </div>
+    <div id="conCard" class="scorecard rounded-3xl p-8 text-center" style="background:var(--panel);border:1px solid var(--line)">
+      <div class="mono text-sm tracking-[0.3em] mb-2" style="color:var(--con)">CON TEAM</div>
+      <div id="conScore" class="display leading-none" style="font-size:clamp(4rem,12vw,8rem);color:var(--con)">0</div>
+      <div class="mono text-xs mt-2" style="color:var(--muted)">of 120 possible</div>
+    </div>
+  </section>
+
+  <p class="text-center text-xs mt-6 mono" style="color:var(--muted)">
+    Last updated <span id="lastUpdate">—</span> &middot; polling every 7s
+  </p>
+</div>
+
+<script>
+/* ============================================================
+   CONFIG — paste your deployed Google Apps Script Web App URL
+   ============================================================ */
+const API_URL = "https://script.google.com/macros/s/AKfycbz2nWvvPio_z7rJSRmON9Stf8Y06F-tVF381P8tQaW6xZgWY9OBSW8hhaLSSdoaIfLnag/exec";
+const POLL_MS = 7000;
+
+/* ---------------- Timer engine ---------------- */
+let total = 60, remaining = 60, ticking = false, handle = null;
+const timerEl = document.getElementById('timer');
+const phaseEl = document.getElementById('phaseLabel');
+
+function fmt(s){
+  const m = Math.floor(s/60), sec = s%60;
+  return String(m).padStart(2,'0') + ':' + String(sec).padStart(2,'0');
+}
+function render(){
+  timerEl.textContent = fmt(remaining);
+  timerEl.classList.remove('timer-warn','timer-danger');
+  if (remaining <= 5) timerEl.classList.add('timer-danger');
+  else if (remaining <= 15) timerEl.classList.add('timer-warn');
+}
+function tick(){
+  if (remaining > 0){ remaining--; render(); }
+  else { stop(); phaseEl.textContent = "TIME"; timerEl.classList.add('timer-danger'); }
+}
+function start(){
+  if (ticking || remaining === 0) return;
+  ticking = true; handle = setInterval(tick, 1000);
+}
+function stop(){ ticking = false; clearInterval(handle); }
+function reset(){ stop(); remaining = total; render(); }
+
+document.getElementById('startBtn').onclick = start;
+document.getElementById('pauseBtn').onclick = stop;
+document.getElementById('resetBtn').onclick = reset;
+
+document.querySelectorAll('.preset').forEach(btn => {
+  btn.onclick = () => {
+    stop();
+    document.querySelectorAll('.preset').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    total = remaining = parseInt(btn.dataset.secs, 10);
+    phaseEl.textContent = btn.dataset.label;
+    render();
+  };
+});
+render();
+
+/* ---------------- Score polling ---------------- */
+const proEl = document.getElementById('proScore');
+const conEl = document.getElementById('conScore');
+const statusEl = document.getElementById('connStatus');
+const dotEl = document.getElementById('liveDot');
+const updEl = document.getElementById('lastUpdate');
+let lastPro = 0, lastCon = 0;
+
+function setStatus(ok){
+  statusEl.textContent = ok ? "LIVE" : "OFFLINE";
+  statusEl.style.color = ok ? "var(--pro)" : "var(--con)";
+  dotEl.style.background = ok ? "var(--pro)" : "var(--con)";
+}
+
+async function poll(){
+  if (API_URL.startsWith("PASTE_")){
+    statusEl.textContent = "NO API URL SET";
+    statusEl.style.color = "var(--gold)";
+    dotEl.style.background = "var(--gold)";
+    return;
+  }
+  try {
+    const res = await fetch(API_URL, { method: 'GET' });
+    const data = await res.json();
+    const pro = Number(data.pro ?? data.Pro ?? 0);
+    const con = Number(data.con ?? data.Con ?? 0);
+    if (pro !== lastPro){ proEl.textContent = pro; bump(document.getElementById('proCard')); lastPro = pro; }
+    if (con !== lastCon){ conEl.textContent = con; bump(document.getElementById('conCard')); lastCon = con; }
+    updEl.textContent = new Date().toLocaleTimeString();
+    setStatus(true);
+  } catch (e){
+    setStatus(false);
+  }
+}
+function bump(card){
+  card.classList.remove('bump'); void card.offsetWidth; card.classList.add('bump');
+}
+
+poll();
+setInterval(poll, POLL_MS);
+</script>
+</body>
+</html>
