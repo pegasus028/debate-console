@@ -89,12 +89,27 @@
       <button id="resetBtn" class="btn px-8 py-4 rounded-2xl font-bold text-lg">RESET</button>
     </div>
 
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-2 mt-6 max-w-3xl mx-auto">
-      <button class="preset btn px-3 py-3 rounded-xl text-sm" data-secs="60" data-label="OPENING / ARGUMENT / CLOSING">Opening<br><span class="mono text-xs" style="color:var(--muted)">1:00</span></button>
-      <button class="preset btn px-3 py-3 rounded-xl text-sm" data-secs="240" data-label="CROSS-EXAMINATION">Cross-Exam<br><span class="mono text-xs" style="color:var(--muted)">4:00</span></button>
-      <button class="preset btn px-3 py-3 rounded-xl text-sm" data-secs="300" data-label="JUDGES' INQUIRY">Judges' Inquiry<br><span class="mono text-xs" style="color:var(--muted)">5:00</span></button>
-      <button class="preset btn px-3 py-3 rounded-xl text-sm" data-secs="30" data-label="LIGHTNING RESPONSE">Lightning<br><span class="mono text-xs" style="color:var(--muted)">0:30</span></button>
-      <button class="preset btn px-3 py-3 rounded-xl text-sm" data-secs="60" data-label="OPENING / ARGUMENT / CLOSING">Argument<br><span class="mono text-xs" style="color:var(--muted)">1:00</span></button>
+    <!-- Base Speech Time control -->
+    <div class="rounded-2xl mt-6 p-5 max-w-md mx-auto" style="background:var(--bg);border:1px solid var(--line)">
+      <div class="mono text-xs tracking-[0.3em] text-center mb-3" style="color:var(--gold)">BASE SPEECH TIME (BST)</div>
+      <div class="flex items-center justify-center gap-4">
+        <button id="bstMinus" class="btn w-14 h-14 rounded-2xl display text-2xl">&minus;</button>
+        <div id="bstValue" class="display tabular-nums" style="font-size:2.5rem;min-width:5.5rem;text-align:center">01:00</div>
+        <button id="bstPlus" class="btn w-14 h-14 rounded-2xl display text-2xl">+</button>
+      </div>
+      <div class="flex justify-center mt-3">
+        <button id="bstReset" class="btn px-4 py-2 rounded-xl text-xs" style="color:var(--muted)">Reset BST</button>
+      </div>
+      <p class="mono text-xs text-center mt-2" style="color:var(--muted)">30-second increments &middot; drives all phases below</p>
+    </div>
+
+    <!-- Phase presets (computed from BST) -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-2 mt-6 max-w-4xl mx-auto">
+      <button class="preset btn px-3 py-3 rounded-xl text-sm" data-mult="1" data-label="OPENING STATEMENTS">Opening<br><span class="bst-time mono text-xs" style="color:var(--muted)">1:00</span></button>
+      <button class="preset btn px-3 py-3 rounded-xl text-sm" data-mult="1" data-label="ARGUMENTS &amp; REBUTTAL">Arg. &amp; Rebuttal<br><span class="bst-time mono text-xs" style="color:var(--muted)">1:00</span></button>
+      <button class="preset btn px-3 py-3 rounded-xl text-sm" data-mult="4" data-label="CROSS-EXAMINATION">Cross-Exam<br><span class="bst-time mono text-xs" style="color:var(--muted)">4:00</span></button>
+      <button class="preset btn px-3 py-3 rounded-xl text-sm" data-mult="1" data-label="CLOSING STATEMENTS">Closing<br><span class="bst-time mono text-xs" style="color:var(--muted)">1:00</span></button>
+      <button class="preset btn px-3 py-3 rounded-xl text-sm" data-mult="6" data-label="JUDGES' INQUIRY">Judges' Inquiry<br><span class="bst-time mono text-xs" style="color:var(--muted)">6:00</span></button>
     </div>
   </section>
 
@@ -172,16 +187,46 @@ document.getElementById('startBtn').onclick = start;
 document.getElementById('pauseBtn').onclick = stop;
 document.getElementById('resetBtn').onclick = reset;
 
-document.querySelectorAll('.preset').forEach(btn => {
+/* ---------------- Base Speech Time (BST) ---------------- */
+const BST_DEFAULT = 60;   // seconds (1:00)
+const BST_STEP = 30;      // seconds
+const BST_MIN = 30;       // never below 0:30
+let bst = BST_DEFAULT;
+
+const bstValueEl = document.getElementById('bstValue');
+const presetBtns = Array.from(document.querySelectorAll('.preset'));
+
+function renderBST(){
+  bstValueEl.textContent = fmt(bst);
+  // Update each preset's displayed (computed) time
+  presetBtns.forEach(btn => {
+    const mult = parseInt(btn.dataset.mult, 10);
+    const span = btn.querySelector('.bst-time');
+    if (span) span.textContent = fmt(bst * mult);
+  });
+  // If a preset is currently selected, keep the live timer in sync with BST
+  const active = presetBtns.find(b => b.classList.contains('active'));
+  if (active && !ticking){
+    total = remaining = bst * parseInt(active.dataset.mult, 10);
+    render();
+  }
+}
+
+document.getElementById('bstPlus').onclick = () => { bst += BST_STEP; renderBST(); };
+document.getElementById('bstMinus').onclick = () => { bst = Math.max(BST_MIN, bst - BST_STEP); renderBST(); };
+document.getElementById('bstReset').onclick = () => { bst = BST_DEFAULT; renderBST(); };
+
+presetBtns.forEach(btn => {
   btn.onclick = () => {
     stop();
-    document.querySelectorAll('.preset').forEach(b => b.classList.remove('active'));
+    presetBtns.forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    total = remaining = parseInt(btn.dataset.secs, 10);
+    total = remaining = bst * parseInt(btn.dataset.mult, 10);
     phaseEl.textContent = btn.dataset.label;
     render();
   };
 });
+renderBST();
 render();
 
 /* ---------------- Score polling ---------------- */
@@ -305,11 +350,23 @@ resetBtn.onclick = async () => {
   }
   resetBtn.textContent = "Resetting…";
   try {
-    await fetch(API_URL, {
+    const res = await fetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ action: 'reset', passcode: RESET_PASSCODE }),
     });
+    let result = {};
+    try { result = await res.json(); } catch (_) { /* non-JSON response */ }
+
+    if (result.status !== 'ok'){
+      // Surface the real reason (e.g. old backend, bad passcode)
+      const reason = result.message || 'backend did not confirm — redeploy the Apps Script?';
+      resetBtn.textContent = "Reset failed: " + reason;
+      resetBtn.style.color = "var(--con)";
+      setTimeout(() => { disarmReset(); }, 5000);
+      return;
+    }
+
     // Force an immediate score refresh
     lastPro = lastCon = -1;
     poll();
@@ -318,8 +375,8 @@ resetBtn.onclick = async () => {
     resetBtn.textContent = "Scores cleared ✓";
     setTimeout(() => { resetBtn.textContent = "Reset all scores"; }, 2500);
   } catch (e){
-    resetBtn.textContent = "Reset failed — retry";
-    setTimeout(() => { resetBtn.textContent = "Reset all scores"; }, 2500);
+    resetBtn.textContent = "Reset failed — network error";
+    setTimeout(() => { disarmReset(); }, 2500);
   }
 };
 
