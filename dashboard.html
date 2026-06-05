@@ -126,6 +126,12 @@
     </div>
   </section>
 
+  <div class="flex justify-center mt-8">
+    <button id="resetSheetBtn" class="btn px-5 py-2 rounded-xl text-sm" style="color:var(--muted)">
+      Reset all scores
+    </button>
+  </div>
+
   <p class="text-center text-xs mt-6 mono" style="color:var(--muted)">
     Last updated <span id="lastUpdate">—</span> &middot; polling every 7s
   </p>
@@ -275,6 +281,56 @@ async function loadFeedback(team){
 
 fbProBtn.onclick = () => loadFeedback('Pro');
 fbConBtn.onclick = () => loadFeedback('Con');
+
+/* ---------------- Reset all scores (passcode-protected) ---------------- */
+// Must match RESET_PASSCODE in Code.gs
+const RESET_PASSCODE = "debate2026";
+const resetBtn = document.getElementById('resetSheetBtn');
+let resetArmed = false, resetTimer = null;
+
+resetBtn.onclick = async () => {
+  // First click arms it; second click within 4s confirms.
+  if (!resetArmed){
+    resetArmed = true;
+    resetBtn.textContent = "Click again to confirm reset";
+    resetBtn.style.color = "var(--con)";
+    resetBtn.style.borderColor = "var(--con)";
+    resetTimer = setTimeout(disarmReset, 4000);
+    return;
+  }
+  clearTimeout(resetTimer);
+  disarmReset();
+
+  if (API_URL.startsWith("PASTE_")){
+    alert("No API URL configured.");
+    return;
+  }
+  resetBtn.textContent = "Resetting…";
+  try {
+    await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'reset', passcode: RESET_PASSCODE }),
+    });
+    // Force an immediate score refresh
+    lastPro = lastCon = -1;
+    poll();
+    fbBody.innerHTML = '<p class="text-sm mono" style="color:var(--muted)">Select a team to view anonymous judge comments.</p>';
+    setFbActive(null);
+    resetBtn.textContent = "Scores cleared ✓";
+    setTimeout(() => { resetBtn.textContent = "Reset all scores"; }, 2500);
+  } catch (e){
+    resetBtn.textContent = "Reset failed — retry";
+    setTimeout(() => { resetBtn.textContent = "Reset all scores"; }, 2500);
+  }
+};
+
+function disarmReset(){
+  resetArmed = false;
+  resetBtn.textContent = "Reset all scores";
+  resetBtn.style.color = "var(--muted)";
+  resetBtn.style.borderColor = "var(--line)";
+}
 </script>
 </body>
 </html>
